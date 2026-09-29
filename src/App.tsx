@@ -129,7 +129,16 @@ export function App() {
     const esAnioActual = new Date(sol.fechaInicio).getFullYear() === anioActual;
     const motivoStr = String(sol.motivo || '').toLowerCase().trim();
     return esDelTrabajador && esAnioActual && motivoStr.includes('conciliaci');
-  }).reduce((acc) => acc + 8.5, 0);
+  }).reduce((acc, sol) => {
+    const cantidadStr = String((sol as any).cantidadHoras || '');
+    if (cantidadStr.includes('día')) {
+      const dias = parseFloat(cantidadStr) || 1;
+      return acc + (dias * 8.5);
+    } else {
+      const hrs = parseFloat(cantidadStr) || 8.5;
+      return acc + hrs;
+    }
+  }, 0);
 
   const horasConciliacionRestantes = Math.max(0, 17 - horasConciliacionUsadas);
 
@@ -152,8 +161,32 @@ export function App() {
         return mismoTrabajador && esDelAnio && motivoSol.includes('conciliaci');
       });
 
-      const horasYaUsadas = solicitudesAnioColaborador.length * 8.5;
-      const horasNuevas = 8.5;
+      // Calcular horas ya usadas sumando registros anteriores de forma dinámica
+      const horasYaUsadas = solicitudesAnioColaborador.reduce((acc, sol) => {
+        const cantidadStr = String((sol as any).cantidadHoras || '');
+        if (cantidadStr.includes('día')) {
+          const dias = parseFloat(cantidadStr) || 1;
+          return acc + (dias * 8.5);
+        } else {
+          const hrs = parseFloat(cantidadStr) || 8.5;
+          return acc + hrs;
+        }
+      }, 0);
+
+      // Calcular horas del nuevo permiso que se quiere agregar
+      const cantidadStrNueva = String((nueva as any).cantidadHoras || '');
+      let horasNuevas = 8.5;
+      if (cantidadStrNueva.includes('día')) {
+        const diasNuevos = parseFloat(cantidadStrNueva) || 1;
+        // RESTRICCIÓN CORREGIDA: Permite hasta 2 días (17 horas) en una sola solicitud
+        if (diasNuevos > 2) {
+          alert('❌ Error: Las solicitudes bajo el motivo "Conciliación" no pueden exceder de 2 días en total por solicitud.');
+          return;
+        }
+        horasNuevas = diasNuevos * 8.5;
+      } else {
+        horasNuevas = parseFloat(cantidadStrNueva) || 8.5;
+      }
 
       if (horasYaUsadas + horasNuevas > 17) {
         alert(`❌ Límite excedido: El colaborador ${nueva.nombreTrabajador} ya cuenta con ${horasYaUsadas} hora(s) de conciliación usadas este año (${anioSolicitud}). El máximo permitido son 17 horas (2 días). Le quedan ${Math.max(0, 17 - horasYaUsadas)} horas disponibles.`);
@@ -453,7 +486,7 @@ export function App() {
                 <FormularioPermiso 
                   onAgregarSolicitud={agregarSolicitud} 
                   nominaPersonal={nomina} 
-                  listaAutorizados={autorizados} // <-- Pasamos la lista dinámica al formulario
+                  listaAutorizados={autorizados}
                 />
               )}
               <HistorialPermisos

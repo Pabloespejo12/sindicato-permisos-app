@@ -13,29 +13,25 @@ export const ResumenMensual: React.FC<Props> = ({ permisos }) => {
 
   // Función matemática inteligente mejorada para leer cantidadHoras y calcular 8.5h por día
   const calcularHorasPermiso = (p: any): number => {
-    // 1. Revisar si viene en el campo principal 'cantidadHoras' (ej. "2 hrs", "1 día(s)")
     const textoCantidad = (p.cantidadHoras || p.totalHoras || p.horas || '').toString().toLowerCase();
 
     if (textoCantidad) {
       if (textoCantidad.includes('días') || textoCantidad.includes('dia') || textoCantidad.includes('día')) {
         const diasNum = parseFloat(textoCantidad.replace(/[^0-9,.]/g, '').replace(',', '.')) || 0;
         return diasNum * 8.5;
-      } else if (textoCantidad.includes('hrs') || texto.includes('hr')) {
+      } else if (textoCantidad.includes('hrs') || textoCantidad.includes('hr')) {
         const horasNum = parseFloat(textoCantidad.replace(/[^0-9,.]/g, '').replace(',', '.')) || 0;
         return horasNum;
       } else {
-        // Si es un número plano guardado como string o número
         const numPlano = parseFloat(textoCantidad.replace(',', '.')) || 0;
         if (numPlano > 0) return numPlano;
       }
     }
 
-    // 2. Compatibilidad con estructuras basadas en días numéricos directos
     if (p.tipoTiempo === 'Dias' && p.dias) {
       return Number(p.dias) * 8.5;
     }
 
-    // 3. Compatibilidad con horas de salida y llegada si aplica
     if (p.horaSalida && p.horaLlegada) {
       try {
         const [hSalida, mSalida] = p.horaSalida.split(':').map(Number);
@@ -72,24 +68,73 @@ export const ResumenMensual: React.FC<Props> = ({ permisos }) => {
     return nombre.toLowerCase().includes(busquedaFuncionario.toLowerCase());
   });
 
-  // 3. Agrupar y sumar horas por funcionario
+  // 3. Agrupar y sumar horas por funcionario con desglose y cálculo de horas a descontar
   const resumenPorPersona = permisosFiltrados.reduce((acc, permiso: any) => {
     const nombre = permiso.nombreTrabajador || permiso.nombreFuncionario || permiso.nombre || 'Sin nombre';
     const rut = permiso.rut || 'N/A';
     const horas = calcularHorasPermiso(permiso);
+    const motivoLower = (permiso.motivo || '').toLowerCase();
 
     if (!acc[nombre]) {
       acc[nombre] = {
         nombre,
         rut,
         cantidadPermisos: 0,
+        particulares: 0,
+        medico: 0,
+        administrativo: 0,
+        conciliacion: 0,
+        asuntosFamiliares: 0,
+        gremial: 0,
+        otros: 0,
         totalHoras: 0,
+        horasADescuentar: 0,
       };
     }
+
     acc[nombre].cantidadPermisos += 1;
+
+    // Clasificación estricta de motivos
+    if (motivoLower.includes('particular')) {
+      acc[nombre].particulares += horas;
+    } else if (motivoLower.includes('médico') || motivoLower.includes('medico')) {
+      acc[nombre].medico += horas;
+    } else if (motivoLower.includes('administrativo')) {
+      acc[nombre].administrativo += horas;
+    } else if (motivoLower.includes('conciliación') || motivoLower.includes('conciliacion')) {
+      acc[nombre].conciliacion += horas;
+    } else if (motivoLower.includes('familiar') || motivoLower.includes('asuntos familiares')) {
+      acc[nombre].asuntosFamiliares += horas;
+    } else if (motivoLower.includes('gremial')) {
+      acc[nombre].gremial += horas;
+    } else {
+      acc[nombre].otros += horas;
+    }
+
     acc[nombre].totalHoras += horas;
+
+    // Cálculo de horas a descontar: Particulares + Administrativo + Asuntos Familiares + Otros
+    acc[nombre].horasADescuentar = 
+      acc[nombre].particulares + 
+      acc[nombre].administrativo + 
+      acc[nombre].asuntosFamiliares + 
+      acc[nombre].otros;
+
     return acc;
-  }, {} as Record<string, { nombre: string; rut: string; cantidadPermisos: number; totalHoras: number }>);
+  }, {} as Record<string, { 
+    nombre: string; 
+    rut: string; 
+    cantidadPermisos: number; 
+    particulares: number;
+    medico: number;
+    administrativo: number;
+    conciliacion: number;
+    asuntosFamiliares: number;
+    gremial: number;
+    otros: number;
+    totalHoras: number;
+    horasADescuentar: number;
+  }>);
 
   const datosResumen = Object.values(resumenPorPersona);
 
@@ -107,12 +152,25 @@ export const ResumenMensual: React.FC<Props> = ({ permisos }) => {
       return;
     }
 
-    const headers = ['Funcionario', 'RUT', 'Total Permisos', 'Total Horas (hrs)'];
+    const headers = [
+      'Funcionario', 'RUT', 'Total Permisos', 'Particulares (hrs)', 'Médico (hrs)', 
+      'Administrativo (hrs)', 'Conciliación (hrs)', 'Asuntos Familiares (hrs)', 
+      'Gremial (hrs)', 'Otros (hrs)', 'Suma Total (hrs)', 'Horas a Descontar (hrs)'
+    ];
+    
     const rows = datosResumen.map(d => [
       `"${d.nombre}"`,
       `"${d.rut}"`,
       d.cantidadPermisos,
-      d.totalHoras
+      d.particulares.toFixed(1),
+      d.medico.toFixed(1),
+      d.administrativo.toFixed(1),
+      d.conciliacion.toFixed(1),
+      d.asuntosFamiliares.toFixed(1),
+      d.gremial.toFixed(1),
+      d.otros.toFixed(1),
+      d.totalHoras.toFixed(1),
+      d.horasADescuentar.toFixed(1)
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + 
@@ -141,7 +199,6 @@ export const ResumenMensual: React.FC<Props> = ({ permisos }) => {
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-[#E6E0D5]">
           <p className="text-sm font-medium text-[#795548]">Funcionario con más horas</p>
-          {/* Se cambió text-lg por text-sm (o text-xs si el nombre es extremadamente largo) para que calce perfecto */}
           <p className="text-sm font-bold text-[#2C241D] mt-1 break-words leading-tight" title={funcionarioConMasHoras ? funcionarioConMasHoras.nombre : 'Ninguno'}>
             {funcionarioConMasHoras ? `${funcionarioConMasHoras.nombre} (${funcionarioConMasHoras.totalHoras.toFixed(1)}h)` : 'N/A'}
           </p>
@@ -180,38 +237,54 @@ export const ResumenMensual: React.FC<Props> = ({ permisos }) => {
         </button>
       </div>
 
-      {/* Tabla Dinámica Agrupada con Encabezado Fijo */}
+      {/* Tabla Dinámica Agrupada con Desglose por Motivo */}
       <div className="bg-white rounded-xl shadow-md border border-[#E6E0D5] overflow-hidden">
         <div className="p-4 bg-[#F5F2EB] border-b border-[#E6E0D5]">
-          <h3 className="font-bold text-[#5C4033]">Acumulado por Trabajador - Periodo {mesSeleccionado} (1 día = 8.5 hrs)</h3>
+          <h3 className="font-bold text-sm text-[#5C4033]">Acumulado por Trabajador - Periodo {mesSeleccionado} (1 día = 8.5 hrs)</h3>
         </div>
         <div className="max-h-[450px] overflow-y-auto">
           <table className="min-w-full divide-y divide-[#E6E0D5]">
             <thead className="bg-[#EBE5D8] sticky top-0 z-10 shadow-sm">
               <tr>
-                <th className="py-3 px-4 text-left text-xs font-semibold text-[#5C4033] uppercase">Funcionario</th>
-                <th className="py-3 px-4 text-left text-xs font-semibold text-[#5C4033] uppercase">RUT</th>
-                <th className="py-3 px-4 text-center text-xs font-semibold text-[#5C4033] uppercase">Total Permisos</th>
-                <th className="py-3 px-4 text-right text-xs font-semibold text-[#5C4033] uppercase">Suma Total (Hrs)</th>
+                <th className="py-1.5 px-1.5 text-left text-[9px] font-semibold text-[#5C4033] uppercase">Funcionario</th>
+                <th className="py-1.5 px-1.5 text-left text-[9px] font-semibold text-[#5C4033] uppercase">RUT</th>
+                <th className="py-1.5 px-1.5 text-center text-[9px] font-semibold text-[#5C4033] uppercase">Total Permisos</th>
+                <th className="py-1.5 px-1.5 text-center text-[9px] font-semibold text-[#5C4033] uppercase">Particulares</th>
+                <th className="py-1.5 px-1.5 text-center text-[9px] font-semibold text-[#5C4033] uppercase">Médico</th>
+                <th className="py-1.5 px-1.5 text-center text-[9px] font-semibold text-[#5C4033] uppercase">Administrativo</th>
+                <th className="py-1.5 px-1.5 text-center text-[9px] font-semibold text-[#5C4033] uppercase">Conciliación</th>
+                <th className="py-1.5 px-1.5 text-center text-[9px] font-semibold text-[#5C4033] uppercase">Asuntos Familiares</th>
+                <th className="py-1.5 px-1.5 text-center text-[9px] font-semibold text-[#5C4033] uppercase">Gremial</th>
+                <th className="py-1.5 px-1.5 text-center text-[9px] font-semibold text-[#5C4033] uppercase">Otros</th>
+                <th className="py-1.5 px-1.5 text-right text-[9px] font-semibold text-[#5C4033] uppercase">Suma Total</th>
+                <th className="py-1.5 px-1.5 text-right text-[9px] font-semibold text-red-700 uppercase bg-[#F5E6E0]">Horas a Descontar</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E6E0D5] text-sm text-[#2C241D]">
+            <tbody className="divide-y divide-[#E6E0D5] text-[9px] text-[#2C241D]">
               {datosResumen.length > 0 ? (
                 datosResumen.map((item, index) => (
                   <tr key={index} className="hover:bg-[#FDFBF7]">
-                    <td className="py-3 px-4 font-medium">{item.nombre}</td>
-                    <td className="py-3 px-4 text-[#795548]">{item.rut}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="bg-[#EBE5D8] text-[#5C4033] text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                    <td className="py-1.5 px-1.5 font-medium">{item.nombre}</td>
+                    <td className="py-1.5 px-1.5 text-[#795548]">{item.rut}</td>
+                    <td className="py-1.5 px-1.5 text-center">
+                      <span className="bg-[#EBE5D8] text-[#5C4033] text-[9px] font-semibold px-1.5 py-0.5 rounded-full">
                         {item.cantidadPermisos}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right font-bold text-[#8B5A2B]">{item.totalHoras.toFixed(1)} hrs</td>
+                    <td className="py-1.5 px-1.5 text-center text-[#795548]">{item.particulares > 0 ? `${item.particulares.toFixed(1)} hrs` : '-'}</td>
+                    <td className="py-1.5 px-1.5 text-center text-[#795548]">{item.medico > 0 ? `${item.medico.toFixed(1)} hrs` : '-'}</td>
+                    <td className="py-1.5 px-1.5 text-center text-[#795548]">{item.administrativo > 0 ? `${item.administrativo.toFixed(1)} hrs` : '-'}</td>
+                    <td className="py-1.5 px-1.5 text-center text-[#795548]">{item.conciliacion > 0 ? `${item.conciliacion.toFixed(1)} hrs` : '-'}</td>
+                    <td className="py-1.5 px-1.5 text-center text-[#795548]">{item.asuntosFamiliares > 0 ? `${item.asuntosFamiliares.toFixed(1)} hrs` : '-'}</td>
+                    <td className="py-1.5 px-1.5 text-center text-[#795548]">{item.gremial > 0 ? `${item.gremial.toFixed(1)} hrs` : '-'}</td>
+                    <td className="py-1.5 px-1.5 text-center text-[#795548]">{item.otros > 0 ? `${item.otros.toFixed(1)} hrs` : '-'}</td>
+                    <td className="py-1.5 px-1.5 text-right font-bold text-[#8B5A2B]">{item.totalHoras.toFixed(1)} hrs</td>
+                    <td className="py-1.5 px-1.5 text-right font-bold text-red-700 bg-[#FDF5F2]">{item.horasADescuentar.toFixed(1)} hrs</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-[#795548]">
+                  <td colSpan={12} className="py-8 text-center text-[#795548]">
                     No se encontraron registros para este mes ({mesSeleccionado}).
                   </td>
                 </tr>

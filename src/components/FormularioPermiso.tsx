@@ -59,6 +59,12 @@ export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaP
     const esPorDias = tipoPermiso === 'Por Dias';
 
     if (esPorDias) {
+      // VALIDACIÓN CORREGIDA: Conciliación puede ser de hasta 2 días completos
+      if (motivo === 'Conciliación' && Number(cantidadDias) > 2) {
+        alert('Error: Las solicitudes bajo el motivo "Conciliación" no pueden exceder de 2 días.');
+        return;
+      }
+
       // VALIDACIÓN PARA DÍAS
       const inicioMs = new Date(fInicio).getTime();
       const finMs = new Date(fFin).getTime();
@@ -258,6 +264,7 @@ export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaP
               <input
                 type="number"
                 min="1"
+                max="2"
                 value={cantidadDias}
                 onChange={(e) => setCantidadDias(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -324,10 +331,10 @@ export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaP
         </div>
       </div>
 
-      <div className="flex justify-end pt-2">
+      <div className="flex justify-end pt-4">
         <button
           type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg text-sm transition shadow cursor-pointer"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3.5 rounded-xl text-base transition shadow-md cursor-pointer"
         >
           Enviar Solicitud
         </button>
@@ -335,5 +342,3 @@ export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaP
     </form>
   );
 };
-
-//llll
